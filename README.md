@@ -2,6 +2,10 @@
 
 CharsetFlow 是一个面向 Windows 11 的本地批量文本编码转换器，目标框架为 `net10.0-windows`。
 
+## 界面预览
+
+![CharsetFlow 主界面](docs/images/charsetflow-main.png)
+
 ## 功能
 
 - 智能识别、扩展名过滤、不过滤三种文件纳入方式
