@@ -20,6 +20,18 @@ internal sealed class ConversionOptionsControl : UserControl
     private readonly RadioButton _utf8Bom = CreateRadioButton("UTF-8 BOM");
     private readonly RadioButton _otherEncoding = CreateRadioButton("其他");
     private readonly ComboBox _otherEncodingList = CreateComboBox();
+    private readonly Panel _otherEncodingHost = new()
+    {
+        BackColor = Theme.Window
+    };
+    private readonly Panel _otherEncodingBottomBorder = new()
+    {
+        BackColor = Theme.Border,
+        Dock = DockStyle.Bottom,
+        Height = 1,
+        Enabled = false,
+        Margin = new Padding(0)
+    };
     private readonly CheckBox _convertLineEndings = CreateCheckBox("转换");
     private readonly RadioButton _crlf = CreateRadioButton("CRLF");
     private readonly RadioButton _lf = CreateRadioButton("LF");
@@ -93,6 +105,8 @@ internal sealed class ConversionOptionsControl : UserControl
 
         _convertLineEndings.CheckedChanged += SettingControl_Changed;
         _otherEncodingList.SelectedIndexChanged += SettingControl_Changed;
+        _otherEncodingList.Enter += (_, _) => UpdateEncodingBorder();
+        _otherEncodingList.Leave += (_, _) => UpdateEncodingBorder();
         _extensionFilter.TextChanged += SettingControl_Changed;
         _outputDirectory.TextChanged += SettingControl_Changed;
         _browseOutput.Click += BrowseOutput_Click;
@@ -203,6 +217,7 @@ internal sealed class ConversionOptionsControl : UserControl
         _otherEncodingList.Enabled = _otherEncoding.Checked;
         _otherEncodingList.BackColor = _otherEncoding.Checked ? Theme.Input : Theme.Disabled;
         _otherEncodingList.ForeColor = _otherEncoding.Checked ? Theme.Text : Theme.DisabledText;
+        UpdateEncodingBorder();
         _crlf.Enabled = _convertLineEndings.Checked;
         _lf.Enabled = _convertLineEndings.Checked;
         _outputDirectory.Enabled = _toDirectory.Checked;
@@ -274,13 +289,25 @@ internal sealed class ConversionOptionsControl : UserControl
         _utf8.Dock = DockStyle.Fill;
         _utf8Bom.Dock = DockStyle.Fill;
         _otherEncoding.Dock = DockStyle.Fill;
+        _otherEncodingHost.Dock = DockStyle.Fill;
+        _otherEncodingHost.Margin = new Padding(0, 2, 0, 2);
         _otherEncodingList.Dock = DockStyle.Fill;
-        _otherEncodingList.Margin = new Padding(0, 2, 0, 2);
+        _otherEncodingList.Margin = new Padding(0);
+        _otherEncodingHost.Controls.Add(_otherEncodingList);
+        _otherEncodingHost.Controls.Add(_otherEncodingBottomBorder);
+        _otherEncodingBottomBorder.BringToFront();
         group.Controls.Add(_utf8, 0, 0);
         group.Controls.Add(_utf8Bom, 1, 0);
         group.Controls.Add(_otherEncoding, 0, 1);
-        group.Controls.Add(_otherEncodingList, 1, 1);
+        group.Controls.Add(_otherEncodingHost, 1, 1);
         return group;
+    }
+
+    private void UpdateEncodingBorder()
+    {
+        _otherEncodingBottomBorder.BackColor = _otherEncodingList.Enabled && _otherEncodingList.Focused
+            ? Theme.Accent
+            : Theme.Border;
     }
 
     private Control CreateLineEndingGroup()

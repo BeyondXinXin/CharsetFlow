@@ -109,20 +109,8 @@ jobs:
             -CompressionLevel Optimal `
             -Force
 
-          $frameworkDependentChecksum = "$frameworkDependentArchive.sha256"
-          $frameworkDependentHash = (Get-FileHash -Path $frameworkDependentArchive -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$frameworkDependentHash  $([IO.Path]::GetFileName($frameworkDependentArchive))" |
-            Set-Content -Path $frameworkDependentChecksum -Encoding ascii
-
-          $selfContainedChecksum = "$selfContainedArchive.sha256"
-          $selfContainedHash = (Get-FileHash -Path $selfContainedArchive -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$selfContainedHash  $([IO.Path]::GetFileName($selfContainedArchive))" |
-            Set-Content -Path $selfContainedChecksum -Encoding ascii
-
           "framework_dependent_archive=$frameworkDependentArchive" >> $env:GITHUB_OUTPUT
-          "framework_dependent_checksum=$frameworkDependentChecksum" >> $env:GITHUB_OUTPUT
           "self_contained_archive=$selfContainedArchive" >> $env:GITHUB_OUTPUT
-          "self_contained_checksum=$selfContainedChecksum" >> $env:GITHUB_OUTPUT
 
       - name: Create GitHub Release
         shell: pwsh
@@ -141,9 +129,7 @@ jobs:
             "release", "create",
             "${{ steps.release.outputs.tag }}",
             "${{ steps.package.outputs.framework_dependent_archive }}",
-            "${{ steps.package.outputs.framework_dependent_checksum }}",
             "${{ steps.package.outputs.self_contained_archive }}",
-            "${{ steps.package.outputs.self_contained_checksum }}",
             "--verify-tag",
             "--generate-notes",
             "--notes", $notes,
