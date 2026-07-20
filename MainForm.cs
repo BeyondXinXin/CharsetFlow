@@ -793,28 +793,12 @@ internal sealed class MainForm : Form
             !option.Id.StartsWith("windows-", StringComparison.Ordinal) &&
             option.Id is not ("gb18030" or "big5" or "shift-jis" or "euc-jp" or "euc-kr"));
 
-        ToolStripMenuItem selectAll = new("勾选全部");
-        selectAll.Click += (_, _) =>
-        {
-            foreach (FileItem item in _files)
-            {
-                item.Selected = true;
-            }
-        };
-        ToolStripMenuItem selectNone = new("取消全部勾选");
-        selectNone.Click += (_, _) =>
-        {
-            foreach (FileItem item in _files)
-            {
-                item.Selected = false;
-            }
-        };
         ToolStripMenuItem reveal = new("在文件资源管理器中显示");
         reveal.Click += (_, _) => RevealCurrentFile();
         ToolStripMenuItem remove = new("从列表移除");
         remove.Click += (_, _) => RemoveHighlightedFiles();
 
-        menu.Items.AddRange([sourceEncoding, new ToolStripSeparator(), selectAll, selectNone, new ToolStripSeparator(), reveal, remove]);
+        menu.Items.AddRange([sourceEncoding, new ToolStripSeparator(), reveal, remove]);
         return menu;
     }
 
