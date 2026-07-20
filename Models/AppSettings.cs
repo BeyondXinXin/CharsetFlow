@@ -19,6 +19,7 @@ internal sealed class AppSettings
     [JsonIgnore]
     private static string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "BeyondXinXin",
         "CharsetFlow",
         "settings.json");
 
