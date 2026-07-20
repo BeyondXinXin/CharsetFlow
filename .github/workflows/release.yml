@@ -61,12 +61,25 @@ jobs:
 
           "tag=$tag" >> $env:GITHUB_OUTPUT
           "version=$version" >> $env:GITHUB_OUTPUT
-          "archive=CharsetFlow-$version-win-x64.zip" >> $env:GITHUB_OUTPUT
+          "framework_dependent_archive=CharsetFlow-$version-win-x64-framework-dependent.zip" >> $env:GITHUB_OUTPUT
+          "self_contained_archive=CharsetFlow-$version-win-x64-self-contained.zip" >> $env:GITHUB_OUTPUT
 
       - name: Restore dependencies
         run: dotnet restore CharsetFlow.csproj --runtime win-x64
 
-      - name: Publish application
+      - name: Publish framework-dependent application
+        shell: pwsh
+        run: |
+          dotnet publish CharsetFlow.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained false `
+            --no-restore `
+            --output "$env:RUNNER_TEMP\publish-framework-dependent" `
+            -p:EnableCompressionInSingleFile=false `
+            -p:Version="${{ steps.release.outputs.version }}"
+
+      - name: Publish self-contained application
         shell: pwsh
         run: |
           dotnet publish CharsetFlow.csproj `
@@ -74,41 +87,66 @@ jobs:
             --runtime win-x64 `
             --self-contained true `
             --no-restore `
-            --output "$env:RUNNER_TEMP\publish" `
+            --output "$env:RUNNER_TEMP\publish-self-contained" `
             -p:Version="${{ steps.release.outputs.version }}"
 
       - name: Package application
         id: package
         shell: pwsh
         run: |
-          $archive = Join-Path $env:RUNNER_TEMP "${{ steps.release.outputs.archive }}"
-          $checksum = "$archive.sha256"
+          $frameworkDependentArchive = Join-Path $env:RUNNER_TEMP "${{ steps.release.outputs.framework_dependent_archive }}"
+          $selfContainedArchive = Join-Path $env:RUNNER_TEMP "${{ steps.release.outputs.self_contained_archive }}"
 
           Compress-Archive `
-            -Path "$env:RUNNER_TEMP\publish\*" `
-            -DestinationPath $archive `
+            -Path "$env:RUNNER_TEMP\publish-framework-dependent\*" `
+            -DestinationPath $frameworkDependentArchive `
             -CompressionLevel Optimal `
             -Force
 
-          $hash = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  $([IO.Path]::GetFileName($archive))" |
-            Set-Content -Path $checksum -Encoding ascii
+          Compress-Archive `
+            -Path "$env:RUNNER_TEMP\publish-self-contained\*" `
+            -DestinationPath $selfContainedArchive `
+            -CompressionLevel Optimal `
+            -Force
 
-          "archive=$archive" >> $env:GITHUB_OUTPUT
-          "checksum=$checksum" >> $env:GITHUB_OUTPUT
+          $frameworkDependentChecksum = "$frameworkDependentArchive.sha256"
+          $frameworkDependentHash = (Get-FileHash -Path $frameworkDependentArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$frameworkDependentHash  $([IO.Path]::GetFileName($frameworkDependentArchive))" |
+            Set-Content -Path $frameworkDependentChecksum -Encoding ascii
+
+          $selfContainedChecksum = "$selfContainedArchive.sha256"
+          $selfContainedHash = (Get-FileHash -Path $selfContainedArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$selfContainedHash  $([IO.Path]::GetFileName($selfContainedArchive))" |
+            Set-Content -Path $selfContainedChecksum -Encoding ascii
+
+          "framework_dependent_archive=$frameworkDependentArchive" >> $env:GITHUB_OUTPUT
+          "framework_dependent_checksum=$frameworkDependentChecksum" >> $env:GITHUB_OUTPUT
+          "self_contained_archive=$selfContainedArchive" >> $env:GITHUB_OUTPUT
+          "self_contained_checksum=$selfContainedChecksum" >> $env:GITHUB_OUTPUT
 
       - name: Create GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $notes = @'
+          ## 下载说明
+
+          - **精简版（framework-dependent）**：`CharsetFlow.exe` 不包含 .NET 运行时，体积较小；运行前需要安装 [.NET 10 Desktop Runtime x64](https://aka.ms/dotnet/10.0/windowsdesktop-runtime-win-x64.exe)。
+          - **完整独立版（self-contained，推荐）**：`CharsetFlow.exe` 已包含 .NET 运行时，体积较大；下载解压后可直接运行。
+          - 两个版本功能相同，只需下载其中一个。已经安装运行时可选精简版，否则选择完整独立版。
+          '@
+
           $arguments = @(
             "release", "create",
             "${{ steps.release.outputs.tag }}",
-            "${{ steps.package.outputs.archive }}",
-            "${{ steps.package.outputs.checksum }}",
+            "${{ steps.package.outputs.framework_dependent_archive }}",
+            "${{ steps.package.outputs.framework_dependent_checksum }}",
+            "${{ steps.package.outputs.self_contained_archive }}",
+            "${{ steps.package.outputs.self_contained_checksum }}",
             "--verify-tag",
             "--generate-notes",
+            "--notes", $notes,
             "--title", "CharsetFlow ${{ steps.release.outputs.tag }}"
           )
 

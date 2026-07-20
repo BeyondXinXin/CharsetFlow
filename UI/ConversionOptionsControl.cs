@@ -265,7 +265,7 @@ internal sealed class ConversionOptionsControl : UserControl
             ColumnCount = 2,
             RowCount = 2,
             BackColor = Theme.Window,
-            Margin = new Padding(0)
+            Margin = new Padding(0, 0, 0, 4)
         };
         group.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
         group.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));

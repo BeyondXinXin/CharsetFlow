@@ -99,6 +99,17 @@ internal sealed class MainForm : Form
         base.OnFormClosing(e);
     }
 
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.Escape)
+        {
+            WindowState = FormWindowState.Minimized;
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
     private void SaveSettings()
     {
         _options.SaveSettings(_settings);
