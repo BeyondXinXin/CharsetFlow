@@ -40,6 +40,11 @@ internal sealed class MainForm : Form
     {
         _startupArguments = startupArguments;
         Text = "CharsetFlow";
+        if (LoadApplicationIcon() is { } applicationIcon)
+        {
+            Icon = applicationIcon;
+        }
+
         BackColor = Theme.Window;
         ForeColor = Theme.Text;
         Font = Theme.Font();
@@ -55,6 +60,18 @@ internal sealed class MainForm : Form
         WireEvents();
         _options.LoadSettings(_settings);
         UpdateFileState();
+    }
+
+    private static System.Drawing.Icon? LoadApplicationIcon()
+    {
+        using Stream? iconStream = typeof(MainForm).Assembly.GetManifestResourceStream("CharsetFlow.Assets.CharsetFlow.ico");
+        if (iconStream is null)
+        {
+            return null;
+        }
+
+        using System.Drawing.Icon embeddedIcon = new(iconStream);
+        return (System.Drawing.Icon)embeddedIcon.Clone();
     }
 
     protected override void OnShown(EventArgs e)
