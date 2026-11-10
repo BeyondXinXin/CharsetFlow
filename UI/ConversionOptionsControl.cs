@@ -5,55 +5,21 @@ namespace CharsetFlow.UI;
 
 internal sealed class ConversionOptionsControl : UserControl
 {
-    private readonly RadioButton _filterAll = CreateRadioButton("不过滤");
-    private readonly RadioButton _filterSmart = CreateRadioButton("智能识别文本文件");
-    private readonly RadioButton _filterExtensions = CreateRadioButton("只扫描指定后缀的文件");
+    private readonly ComboBox _filter = CreateChoice("文件过滤", "智能识别", "指定后缀", "不过滤");
+    private readonly ComboBox _encoding = CreateChoice("目标编码");
+    private readonly ComboBox _lineEnding = CreateChoice("换行符", "保持原样", "CRLF", "LF");
+    private readonly ComboBox _output = CreateChoice("输出位置", "覆盖原文件", "指定文件夹");
     private readonly TextBox _extensionFilter = new()
     {
-        BorderStyle = BorderStyle.FixedSingle,
-        BackColor = Theme.Input,
-        ForeColor = Theme.Text,
-        Font = Theme.Font(9F),
-        Height = 24
+        AccessibleName = "文件后缀",
+        PlaceholderText = "例如 txt md json"
     };
-    private readonly RadioButton _utf8 = CreateRadioButton("UTF-8");
-    private readonly RadioButton _utf8Bom = CreateRadioButton("UTF-8 BOM");
-    private readonly RadioButton _otherEncoding = CreateRadioButton("其他");
-    private readonly ComboBox _otherEncodingList = CreateComboBox();
-    private readonly Panel _otherEncodingHost = new()
-    {
-        BackColor = Theme.Window
-    };
-    private readonly Panel _otherEncodingBottomBorder = new()
-    {
-        BackColor = Theme.Border,
-        Dock = DockStyle.Bottom,
-        Height = 1,
-        Enabled = false,
-        Margin = new Padding(0)
-    };
-    private readonly CheckBox _convertLineEndings = CreateCheckBox("转换");
-    private readonly RadioButton _crlf = CreateRadioButton("CRLF");
-    private readonly RadioButton _lf = CreateRadioButton("LF");
-    private readonly RadioButton _inPlace = CreateRadioButton("覆盖");
-    private readonly RadioButton _toDirectory = CreateRadioButton("文件夹");
     private readonly TextBox _outputDirectory = new()
     {
-        BorderStyle = BorderStyle.FixedSingle,
-        Multiline = true,
-        BackColor = Theme.Input,
-        ForeColor = Theme.Text,
-        Font = Theme.Font(9F),
-        Height = 24
+        AccessibleName = "输出文件夹",
+        PlaceholderText = "选择或输入文件夹路径"
     };
-    private readonly ModernButton _browseOutput = new()
-    {
-        Text = "...",
-        Width = 34,
-        Padding = new Padding(0),
-        ButtonStyle = ModernButtonStyle.Secondary
-    };
-
+    private readonly TableLayoutPanel _outputPath = new();
     private string _excludeRule = string.Empty;
     private bool _recursive = true;
     private bool _loadingSettings;
@@ -62,54 +28,51 @@ internal sealed class ConversionOptionsControl : UserControl
 
     public ConversionOptionsControl()
     {
-        BackColor = Theme.Window;
-        Padding = new Padding(8, 4, 8, 8);
-        AutoScroll = false;
+        BackColor = Theme.Subtle;
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _encoding.Items.AddRange(EncodingCatalog.All.Cast<object>().ToArray());
 
-        _otherEncodingList.Items.AddRange(EncodingCatalog.All
-            .Where(option => option.Id is not ("utf-8" or "utf-8-bom"))
-            .Cast<object>()
-            .ToArray());
-
-        TableLayoutPanel content = new()
+        TableLayoutPanel layout = new()
         {
             Dock = DockStyle.Top,
             AutoSize = true,
-            ColumnCount = 1,
-            BackColor = Theme.Window,
-            Margin = new Padding(0),
-            Padding = new Padding(0)
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 4,
+            RowCount = 3,
+            Margin = Padding.Empty,
+            Padding = new Padding(16, 8, 16, 10)
         };
-        content.Controls.Add(CreateSectionLabel("文件过滤"));
-        content.Controls.Add(CreateFilterGroup());
-        content.Controls.Add(CreateDivider());
-        content.Controls.Add(CreateSectionLabel("输出字符集"));
-        content.Controls.Add(CreateEncodingGroup());
-        content.Controls.Add(CreateDivider());
-        content.Controls.Add(CreateSectionLabel("换行符"));
-        content.Controls.Add(CreateLineEndingGroup());
-        content.Controls.Add(CreateDivider());
-        content.Controls.Add(CreateSectionLabel("输出位置"));
-        content.Controls.Add(CreateOutputGroup());
-        Controls.Add(content);
-
-        foreach (RadioButton radio in new[]
-                 {
-                     _filterAll, _filterSmart, _filterExtensions,
-                     _utf8, _utf8Bom, _otherEncoding,
-                     _crlf, _lf, _inPlace, _toDirectory
-                 })
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 29));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 19));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+        for (int row = 0; row < layout.RowCount; row++)
         {
-            radio.CheckedChanged += SettingControl_Changed;
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         }
 
-        _convertLineEndings.CheckedChanged += SettingControl_Changed;
-        _otherEncodingList.SelectedIndexChanged += SettingControl_Changed;
-        _otherEncodingList.Enter += (_, _) => UpdateEncodingBorder();
-        _otherEncodingList.Leave += (_, _) => UpdateEncodingBorder();
+        AddField(layout, _filter, 0);
+        AddField(layout, _encoding, 1);
+        AddField(layout, _lineEnding, 2);
+        AddField(layout, _output, 3);
+
+        _extensionFilter.Dock = DockStyle.Top;
+        _extensionFilter.Margin = new Padding(0, 6, 12, 0);
+        layout.Controls.Add(_extensionFilter, 0, 2);
+        layout.SetColumnSpan(_extensionFilter, 2);
+        BuildOutputPath();
+        layout.Controls.Add(_outputPath, 2, 2);
+        layout.SetColumnSpan(_outputPath, 2);
+        Controls.Add(layout);
+
+        foreach (ComboBox choice in new[] { _filter, _encoding, _lineEnding, _output })
+        {
+            choice.SelectedIndexChanged += SettingControl_Changed;
+        }
+
         _extensionFilter.TextChanged += SettingControl_Changed;
         _outputDirectory.TextChanged += SettingControl_Changed;
-        _browseOutput.Click += BrowseOutput_Click;
     }
 
     public void LoadSettings(AppSettings settings)
@@ -117,71 +80,68 @@ internal sealed class ConversionOptionsControl : UserControl
         _loadingSettings = true;
         try
         {
-            _filterAll.Checked = settings.FilterMode == FilterMode.All;
-            _filterSmart.Checked = settings.FilterMode == FilterMode.Smart;
-            _filterExtensions.Checked = settings.FilterMode == FilterMode.Extensions;
+            _filter.SelectedIndex = settings.FilterMode switch
+            {
+                FilterMode.Extensions => 1,
+                FilterMode.All => 2,
+                _ => 0
+            };
             _extensionFilter.Text = settings.IncludeRule;
             _excludeRule = settings.ExcludeRule;
             _recursive = settings.Recursive;
-
-            EncodingOption selected = EncodingCatalog.FindById(settings.TargetEncodingId) ?? EncodingCatalog.Default;
-            _utf8.Checked = selected.Id == "utf-8";
-            _utf8Bom.Checked = selected.Id == "utf-8-bom";
-            _otherEncoding.Checked = !_utf8.Checked && !_utf8Bom.Checked;
-            _otherEncodingList.SelectedItem = _otherEncoding.Checked
-                ? selected
-                : _otherEncodingList.Items.Cast<object>().FirstOrDefault();
-
-            _convertLineEndings.Checked = settings.LineEnding is LineEndingMode.CrLf or LineEndingMode.Lf;
-            _lf.Checked = settings.LineEnding == LineEndingMode.Lf;
-            _crlf.Checked = !_lf.Checked;
-
-            _toDirectory.Checked = settings.OutputMode == OutputMode.Directory;
-            _inPlace.Checked = !_toDirectory.Checked;
+            _encoding.SelectedItem = EncodingCatalog.FindById(settings.TargetEncodingId) ?? EncodingCatalog.Default;
+            _lineEnding.SelectedIndex = settings.LineEnding switch
+            {
+                LineEndingMode.CrLf => 1,
+                LineEndingMode.Lf => 2,
+                _ => 0
+            };
+            _output.SelectedIndex = settings.OutputMode == OutputMode.Directory ? 1 : 0;
             _outputDirectory.Text = settings.OutputDirectory;
         }
         finally
         {
             _loadingSettings = false;
-            UpdateEnabledState();
+            UpdateVisibleFields();
         }
     }
 
     public void SaveSettings(AppSettings settings)
     {
-        settings.FilterMode = SelectedFilterMode;
-        settings.IncludeRule = _extensionFilter.Text.Trim();
-        settings.ExcludeRule = _excludeRule;
-        settings.Recursive = _recursive;
-        settings.TargetEncodingId = SelectedEncoding.Id;
-        settings.LineEnding = !_convertLineEndings.Checked
-            ? LineEndingMode.Preserve
-            : _lf.Checked ? LineEndingMode.Lf : LineEndingMode.CrLf;
-        settings.OutputMode = _toDirectory.Checked ? OutputMode.Directory : OutputMode.InPlace;
-        settings.OutputDirectory = _outputDirectory.Text.Trim();
-        settings.CreateBackup = false;
-        settings.VerifyRoundTrip = true;
+        ScanOptions scan = GetScanOptions();
+        ConversionOptions conversion = GetConversionOptions();
+        settings.FilterMode = scan.FilterMode;
+        settings.IncludeRule = scan.IncludeRule;
+        settings.ExcludeRule = scan.ExcludeRule;
+        settings.Recursive = scan.Recursive;
+        settings.TargetEncodingId = conversion.TargetEncoding.Id;
+        settings.LineEnding = conversion.LineEnding;
+        settings.OutputMode = conversion.OutputMode;
+        settings.OutputDirectory = conversion.OutputDirectory;
+        settings.CreateBackup = conversion.CreateBackup;
+        settings.VerifyRoundTrip = conversion.VerifyRoundTrip;
     }
 
     public ScanOptions GetScanOptions() => new(
-        SelectedFilterMode,
+        _filter.SelectedIndex switch { 1 => FilterMode.Extensions, 2 => FilterMode.All, _ => FilterMode.Smart },
         _extensionFilter.Text.Trim(),
         _excludeRule,
         _recursive);
 
     public ConversionOptions GetConversionOptions() => new(
-        SelectedEncoding,
-        !_convertLineEndings.Checked ? LineEndingMode.Preserve : _lf.Checked ? LineEndingMode.Lf : LineEndingMode.CrLf,
-        _toDirectory.Checked ? OutputMode.Directory : OutputMode.InPlace,
+        _encoding.SelectedItem as EncodingOption ?? EncodingCatalog.Default,
+        _lineEnding.SelectedIndex switch { 1 => LineEndingMode.CrLf, 2 => LineEndingMode.Lf, _ => LineEndingMode.Preserve },
+        _output.SelectedIndex == 1 ? OutputMode.Directory : OutputMode.InPlace,
         _outputDirectory.Text.Trim(),
         false,
         true);
 
     public bool ValidateConversionOptions(out string message)
     {
-        if (_toDirectory.Checked && string.IsNullOrWhiteSpace(_outputDirectory.Text))
+        if (_output.SelectedIndex == 1 && string.IsNullOrWhiteSpace(_outputDirectory.Text))
         {
             message = "请选择输出文件夹。";
+            _outputDirectory.Focus();
             return false;
         }
 
@@ -189,41 +149,38 @@ internal sealed class ConversionOptionsControl : UserControl
         return true;
     }
 
-    private EncodingOption SelectedEncoding => _utf8.Checked
-        ? EncodingCatalog.FindById("utf-8")!
-        : _utf8Bom.Checked
-            ? EncodingCatalog.FindById("utf-8-bom")!
-            : _otherEncodingList.SelectedItem as EncodingOption ?? EncodingCatalog.FindById("gb18030")!;
-
-    private FilterMode SelectedFilterMode => _filterAll.Checked
-        ? FilterMode.All
-        : _filterExtensions.Checked ? FilterMode.Extensions : FilterMode.Smart;
-
     private void SettingControl_Changed(object? sender, EventArgs e)
     {
-        UpdateEnabledState();
         if (!_loadingSettings)
         {
+            UpdateVisibleFields();
             SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
-    private void UpdateEnabledState()
+    private void UpdateVisibleFields()
     {
-        bool extensionsEnabled = _filterExtensions.Checked;
-        _extensionFilter.Enabled = extensionsEnabled;
-        _extensionFilter.BackColor = extensionsEnabled ? Theme.Input : Theme.Disabled;
-        _extensionFilter.ForeColor = extensionsEnabled ? Theme.Text : Theme.DisabledText;
-        _otherEncodingList.Enabled = _otherEncoding.Checked;
-        _otherEncodingList.BackColor = _otherEncoding.Checked ? Theme.Input : Theme.Disabled;
-        _otherEncodingList.ForeColor = _otherEncoding.Checked ? Theme.Text : Theme.DisabledText;
-        UpdateEncodingBorder();
-        _crlf.Enabled = _convertLineEndings.Checked;
-        _lf.Enabled = _convertLineEndings.Checked;
-        _outputDirectory.Enabled = _toDirectory.Checked;
-        _outputDirectory.BackColor = _toDirectory.Checked ? Theme.Input : Theme.Disabled;
-        _outputDirectory.ForeColor = _toDirectory.Checked ? Theme.Text : Theme.DisabledText;
-        _browseOutput.Enabled = _toDirectory.Checked;
+        _extensionFilter.Visible = _filter.SelectedIndex == 1;
+        _outputPath.Visible = _output.SelectedIndex == 1;
+    }
+
+    private void BuildOutputPath()
+    {
+        _outputPath.AutoSize = true;
+        _outputPath.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _outputPath.Dock = DockStyle.Top;
+        _outputPath.Margin = new Padding(0, 6, 0, 0);
+        _outputPath.ColumnCount = 2;
+        _outputPath.RowCount = 1;
+        _outputPath.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        _outputPath.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _outputDirectory.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        _outputDirectory.Margin = new Padding(0, 0, 6, 0);
+        Button browse = Theme.CreateButton("浏览");
+        browse.Margin = Padding.Empty;
+        browse.Click += BrowseOutput_Click;
+        _outputPath.Controls.Add(_outputDirectory, 0, 0);
+        _outputPath.Controls.Add(browse, 1, 0);
     }
 
     private void BrowseOutput_Click(object? sender, EventArgs e)
@@ -241,196 +198,30 @@ internal sealed class ConversionOptionsControl : UserControl
         }
     }
 
-    private Control CreateFilterGroup()
+    private static void AddField(TableLayoutPanel layout, ComboBox choice, int column)
     {
-        TableLayoutPanel group = new()
+        Label label = new()
         {
-            Dock = DockStyle.Top,
-            Height = 104,
-            MinimumSize = new Size(0, 104),
-            ColumnCount = 1,
-            RowCount = 4,
-            BackColor = Theme.Window,
-            Margin = new Padding(0)
-        };
-        for (int row = 0; row < 4; row++)
-        {
-            group.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
-        }
-
-        _filterAll.Dock = DockStyle.Fill;
-        _filterSmart.Dock = DockStyle.Fill;
-        _filterExtensions.Dock = DockStyle.Fill;
-        _extensionFilter.Dock = DockStyle.Fill;
-        _extensionFilter.Margin = new Padding(18, 1, 0, 1);
-        group.Controls.Add(_filterAll, 0, 0);
-        group.Controls.Add(_filterSmart, 0, 1);
-        group.Controls.Add(_filterExtensions, 0, 2);
-        group.Controls.Add(_extensionFilter, 0, 3);
-        return group;
-    }
-
-    private Control CreateEncodingGroup()
-    {
-        TableLayoutPanel group = new()
-        {
-            Dock = DockStyle.Top,
-            Height = 56,
-            MinimumSize = new Size(0, 56),
-            ColumnCount = 2,
-            RowCount = 2,
-            BackColor = Theme.Window,
+            Text = choice.AccessibleName,
+            AutoSize = true,
+            ForeColor = Theme.Muted,
             Margin = new Padding(0, 0, 0, 4)
         };
-        group.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
-        group.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        group.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        group.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        _utf8.Dock = DockStyle.Fill;
-        _utf8Bom.Dock = DockStyle.Fill;
-        _otherEncoding.Dock = DockStyle.Fill;
-        _otherEncodingHost.Dock = DockStyle.Fill;
-        _otherEncodingHost.Margin = new Padding(0, 2, 0, 2);
-        _otherEncodingList.Dock = DockStyle.Fill;
-        _otherEncodingList.Margin = new Padding(0);
-        _otherEncodingHost.Controls.Add(_otherEncodingList);
-        _otherEncodingHost.Controls.Add(_otherEncodingBottomBorder);
-        _otherEncodingBottomBorder.BringToFront();
-        group.Controls.Add(_utf8, 0, 0);
-        group.Controls.Add(_utf8Bom, 1, 0);
-        group.Controls.Add(_otherEncoding, 0, 1);
-        group.Controls.Add(_otherEncodingHost, 1, 1);
-        return group;
+        choice.Dock = DockStyle.Top;
+        choice.Margin = new Padding(0, 0, column < layout.ColumnCount - 1 ? 12 : 0, 0);
+        layout.Controls.Add(label, column, 0);
+        layout.Controls.Add(choice, column, 1);
     }
 
-    private void UpdateEncodingBorder()
+    private static ComboBox CreateChoice(string name, params string[] items)
     {
-        _otherEncodingBottomBorder.BackColor = _otherEncodingList.Enabled && _otherEncodingList.Focused
-            ? Theme.Accent
-            : Theme.Border;
-    }
-
-    private Control CreateLineEndingGroup()
-    {
-        TableLayoutPanel group = new()
+        ComboBox choice = new()
         {
-            Dock = DockStyle.Top,
-            Height = 28,
-            MinimumSize = new Size(0, 28),
-            ColumnCount = 3,
-            RowCount = 1,
-            BackColor = Theme.Window,
-            Margin = new Padding(0)
+            AccessibleName = name,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            MaxDropDownItems = 12
         };
-        group.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
-        group.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
-        group.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        group.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        _convertLineEndings.Dock = DockStyle.Fill;
-        _crlf.Dock = DockStyle.Fill;
-        _crlf.Margin = new Padding(0);
-        _lf.Dock = DockStyle.Fill;
-        _lf.Margin = new Padding(0);
-        group.Controls.Add(_convertLineEndings, 0, 0);
-        group.Controls.Add(_crlf, 1, 0);
-        group.Controls.Add(_lf, 2, 0);
-        return group;
+        choice.Items.AddRange(items);
+        return choice;
     }
-
-    private Control CreateOutputGroup()
-    {
-        TableLayoutPanel group = new()
-        {
-            Dock = DockStyle.Top,
-            Height = 56,
-            MinimumSize = new Size(0, 56),
-            ColumnCount = 3,
-            RowCount = 2,
-            BackColor = Theme.Window,
-            Margin = new Padding(0)
-        };
-        group.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
-        group.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        group.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34));
-        group.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        group.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        _inPlace.Dock = DockStyle.Fill;
-        _toDirectory.Dock = DockStyle.Fill;
-        _outputDirectory.Dock = DockStyle.Fill;
-        _outputDirectory.Margin = new Padding(0, 2, 6, 2);
-        _browseOutput.Dock = DockStyle.Fill;
-        _browseOutput.Margin = new Padding(0, 2, 0, 2);
-        group.Controls.Add(_inPlace, 0, 0);
-        group.Controls.Add(_toDirectory, 1, 0);
-        group.SetColumnSpan(_toDirectory, 2);
-        group.Controls.Add(_outputDirectory, 0, 1);
-        group.SetColumnSpan(_outputDirectory, 2);
-        group.Controls.Add(_browseOutput, 2, 1);
-        return group;
-    }
-
-    private static Label CreateSectionLabel(string text) => new()
-    {
-        Text = text,
-        AutoSize = false,
-        Height = 30,
-        MinimumSize = new Size(0, 30),
-        Margin = new Padding(0),
-        TextAlign = ContentAlignment.MiddleLeft,
-        ForeColor = Theme.Text,
-        Font = Theme.Font(10F, FontStyle.Bold),
-        Dock = DockStyle.Top
-    };
-
-    private static Control CreateDivider()
-    {
-        Panel divider = new()
-        {
-            Height = 11,
-            MinimumSize = new Size(0, 11),
-            Dock = DockStyle.Top,
-            BackColor = Theme.Window,
-            Margin = new Padding(0)
-        };
-        divider.Paint += (_, e) =>
-        {
-            using Pen line = new(Theme.Border);
-            e.Graphics.DrawLine(line, 0, divider.Height / 2, divider.Width, divider.Height / 2);
-        };
-        return divider;
-    }
-
-    private static RadioButton CreateRadioButton(string text) => new ModernRadioButton
-    {
-        Text = text,
-        AutoSize = false,
-        Height = 28,
-        Margin = new Padding(0),
-        ForeColor = Theme.Text,
-        Font = Theme.Font(9.5F),
-        Cursor = Cursors.Hand
-    };
-
-    private static CheckBox CreateCheckBox(string text) => new ModernCheckBox
-    {
-        Text = text,
-        AutoSize = false,
-        Height = 28,
-        Margin = new Padding(0),
-        ForeColor = Theme.Text,
-        Font = Theme.Font(9.5F),
-        Cursor = Cursors.Hand
-    };
-
-    private static ComboBox CreateComboBox() => new ModernComboBox
-    {
-        DropDownStyle = ComboBoxStyle.DropDownList,
-        FlatStyle = FlatStyle.Flat,
-        Height = 24,
-        IntegralHeight = false,
-        DropDownHeight = 260,
-        BackColor = Theme.Input,
-        ForeColor = Theme.Text,
-        Font = Theme.Font(9F)
-    };
 }

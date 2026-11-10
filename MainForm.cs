@@ -14,26 +14,19 @@ internal sealed class MainForm : Form
     private readonly FileConversionService _converter = new();
     private readonly BindingList<FileItem> _files = [];
     private readonly BindingSource _bindingSource = new();
-    private readonly SplitContainer _mainSplit = new();
-
     private readonly ConversionOptionsControl _options = new();
     private readonly DataGridView _grid = new();
-    private readonly Panel _emptyState = new();
-    private readonly RichTextBox _preview = new();
-    private readonly Label _previewTitle = new();
+    private readonly Label _emptyState = new();
     private readonly Label _fileCount = new();
     private readonly Label _status = new();
     private readonly SlimProgressBar _progress = new();
-    private readonly ModernButton _addFilesButton = CreateButton("添加文件", ModernButtonStyle.Secondary, 100);
-    private readonly ModernButton _addFolderButton = CreateButton("添加文件夹", ModernButtonStyle.Secondary, 112);
-    private readonly ModernButton _removeButton = CreateButton("移除", ModernButtonStyle.Ghost, 72);
-    private readonly ModernButton _clearButton = CreateButton("清空", ModernButtonStyle.Ghost, 72);
-    private readonly ModernButton _settingsButton = CreateButton("转换设置", ModernButtonStyle.Secondary, 104);
-    private readonly ModernButton _convertButton = CreateButton("开始转换", ModernButtonStyle.Primary, 126);
-    private readonly ModernButton _cancelButton = CreateButton("取消", ModernButtonStyle.Secondary, 82);
+    private readonly Button _addFilesButton = Theme.CreateButton("添加文件");
+    private readonly Button _addFolderButton = Theme.CreateButton("添加文件夹");
+    private readonly Button _removeButton = Theme.CreateButton("移除");
+    private readonly Button _clearButton = Theme.CreateButton("清空");
+    private readonly Button _convertButton = Theme.CreateButton("开始转换", primary: true);
 
     private CancellationTokenSource? _operationCancellation;
-    private CancellationTokenSource? _previewCancellation;
     private bool _busy;
 
     public MainForm(string[] startupArguments)
@@ -47,19 +40,21 @@ internal sealed class MainForm : Form
 
         BackColor = Theme.Window;
         ForeColor = Theme.Text;
-        Font = Theme.Font();
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(760, 520);
-        ClientSize = new Size(960, 620);
-        AutoScaleMode = AutoScaleMode.Dpi;
+        MinimumSize = new Size(700, 360);
+        ClientSize = new Size(980, 560);
         KeyPreview = true;
         AllowDrop = true;
 
+        SuspendLayout();
         BuildLayout();
         ConfigureGrid();
         WireEvents();
         _options.LoadSettings(_settings);
         UpdateFileState();
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        ResumeLayout(true);
     }
 
     private static System.Drawing.Icon? LoadApplicationIcon()
@@ -77,12 +72,7 @@ internal sealed class MainForm : Form
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
-        WindowEffects.Apply(Handle);
-        if (_mainSplit.Width > 460)
-        {
-            _mainSplit.Panel1MinSize = 252;
-            _mainSplit.SplitterDistance = 252;
-        }
+        ApplyGridMetrics();
 
         string[] paths = _startupArguments.Where(path => File.Exists(path) || Directory.Exists(path)).ToArray();
         if (paths.Length > 0)
@@ -94,7 +84,6 @@ internal sealed class MainForm : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         _operationCancellation?.Cancel();
-        _previewCancellation?.Cancel();
         SaveSettings();
         base.OnFormClosing(e);
     }
@@ -129,273 +118,96 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 2,
-            Padding = new Padding(0),
-            BackColor = Theme.Window
+            RowCount = 5,
+            Margin = Padding.Empty
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 1));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.Controls.Add(new Panel { Dock = DockStyle.Fill, BackColor = Theme.Border }, 0, 0);
-        root.Controls.Add(CreateContent(), 0, 1);
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        Panel list = new() { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        _grid.Dock = DockStyle.Fill;
+        _emptyState.Dock = DockStyle.Fill;
+        _emptyState.Text = "拖放文件或文件夹";
+        _emptyState.TextAlign = ContentAlignment.MiddleCenter;
+        _emptyState.ForeColor = Theme.Muted;
+        list.Controls.Add(_grid);
+        list.Controls.Add(_emptyState);
+
+        _options.Dock = DockStyle.Top;
+        _options.Margin = Padding.Empty;
+        _progress.Dock = DockStyle.Top;
+        _progress.Margin = Padding.Empty;
+        _progress.Visible = false;
+        root.Controls.Add(CreateToolbar(), 0, 0);
+        root.Controls.Add(_options, 0, 1);
+        root.Controls.Add(list, 0, 2);
+        root.Controls.Add(_progress, 0, 3);
+        root.Controls.Add(CreateStatusBar(), 0, 4);
         Controls.Add(root);
-    }
-
-    private Control CreateHeader()
-    {
-        Panel header = new() { Dock = DockStyle.Fill, BackColor = Theme.Window };
-
-        RoundedPanel logo = new()
-        {
-            Location = new Point(0, 8),
-            Size = new Size(48, 48),
-            Radius = 12,
-            FillColor = Theme.Accent,
-            BorderColor = Theme.Accent
-        };
-        logo.Controls.Add(new Label
-        {
-            Text = "Aa",
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.White,
-            BackColor = Color.Transparent,
-            Font = Theme.Font(15F, FontStyle.Bold)
-        });
-
-        Label title = new()
-        {
-            Text = "CharsetFlow",
-            Location = new Point(64, 4),
-            AutoSize = true,
-            ForeColor = Theme.Text,
-            Font = Theme.Font(22F, FontStyle.Bold)
-        };
-        Label subtitle = new()
-        {
-            Text = "智能识别 · 批量转换 · 无损校验",
-            Location = new Point(66, 42),
-            AutoSize = true,
-            ForeColor = Theme.Muted,
-            Font = Theme.Font(9F)
-        };
-
-        Label safety = new()
-        {
-            Text = "本地处理  ·  文件不会上传",
-            Dock = DockStyle.Right,
-            Width = 220,
-            TextAlign = ContentAlignment.MiddleRight,
-            ForeColor = Theme.Muted,
-            Font = Theme.Font(8.5F)
-        };
-
-        header.Controls.Add(safety);
-        header.Controls.Add(subtitle);
-        header.Controls.Add(title);
-        header.Controls.Add(logo);
-        return header;
     }
 
     private Control CreateToolbar()
     {
-        Panel toolbar = new()
+        TableLayoutPanel toolbar = new()
         {
-            Dock = DockStyle.Fill,
-            BackColor = Theme.Window,
-            Padding = new Padding(8, 6, 8, 5)
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = new Padding(16, 10, 16, 10)
         };
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
         FlowLayoutPanel actions = new()
         {
             Dock = DockStyle.Left,
-            Width = 320,
-            FlowDirection = FlowDirection.LeftToRight,
+            AutoSize = true,
             WrapContents = false,
-            BackColor = Theme.Window,
-            Padding = new Padding(0)
+            Margin = Padding.Empty
         };
-        foreach (ModernButton button in new[] { _addFilesButton, _addFolderButton, _removeButton })
+        foreach (Button button in new[] { _addFilesButton, _addFolderButton, _removeButton, _clearButton })
         {
-            button.Margin = new Padding(0, 0, 6, 0);
+            button.Margin = new Padding(0, 0, 8, 0);
             actions.Controls.Add(button);
         }
 
-        _fileCount.Dock = DockStyle.Right;
-        _fileCount.Width = 180;
-        _fileCount.TextAlign = ContentAlignment.MiddleRight;
-        _fileCount.ForeColor = Theme.Muted;
-        _fileCount.Font = Theme.Font(9F);
-
-        toolbar.Controls.Add(_fileCount);
-        toolbar.Controls.Add(actions);
-        toolbar.Controls.Add(new Panel
-        {
-            Dock = DockStyle.Bottom,
-            Height = 1,
-            BackColor = Theme.Border
-        });
+        _convertButton.Margin = Padding.Empty;
+        _convertButton.MinimumSize = new Size(104, 0);
+        toolbar.Controls.Add(actions, 0, 0);
+        toolbar.Controls.Add(_convertButton, 1, 0);
         return toolbar;
     }
 
-    private Control CreateContent()
+    private Control CreateStatusBar()
     {
-        _mainSplit.Dock = DockStyle.Fill;
-        _mainSplit.Orientation = Orientation.Vertical;
-        _mainSplit.SplitterWidth = 1;
-        _mainSplit.FixedPanel = FixedPanel.Panel1;
-        _mainSplit.IsSplitterFixed = true;
-        _mainSplit.BackColor = Theme.Border;
-        _mainSplit.Panel1.BackColor = Theme.Window;
-        _mainSplit.Panel2.BackColor = Theme.Card;
-        _mainSplit.Panel1.Controls.Add(CreateLeftSettings());
-        _mainSplit.Panel2.Controls.Add(CreateListWorkspace());
-        return _mainSplit;
-    }
-
-    private Control CreateLeftSettings()
-    {
-        TableLayoutPanel layout = new()
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 3,
-            BackColor = Theme.Window,
-            Padding = new Padding(12, 8, 12, 4)
-        };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 5));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        TableLayoutPanel buttons = new()
+        TableLayoutPanel footer = new()
         {
             Dock = DockStyle.Top,
-            Height = 28,
-            Margin = new Padding(0),
-            ColumnCount = 3,
-            RowCount = 1,
-            BackColor = Theme.Window
-        };
-        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 6));
-        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        buttons.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        _convertButton.Dock = DockStyle.Fill;
-        _convertButton.Margin = new Padding(0);
-        _clearButton.ButtonStyle = ModernButtonStyle.Secondary;
-        _clearButton.Dock = DockStyle.Fill;
-        _clearButton.Margin = new Padding(0);
-        buttons.Controls.Add(_convertButton, 0, 0);
-        buttons.Controls.Add(_clearButton, 2, 0);
-
-        _progress.Dock = DockStyle.Fill;
-        _progress.Margin = new Padding(0);
-        _progress.Visible = false;
-        _options.Dock = DockStyle.Fill;
-        _options.Margin = new Padding(0);
-        layout.Controls.Add(buttons, 0, 0);
-        layout.Controls.Add(_progress, 0, 1);
-        layout.Controls.Add(_options, 0, 2);
-        return layout;
-    }
-
-    private Control CreateListWorkspace()
-    {
-        TableLayoutPanel workspace = new()
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 2,
-            BackColor = Theme.Card,
-            Margin = new Padding(0),
-            Padding = new Padding(0)
-        };
-        workspace.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        workspace.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        Panel gridHost = new() { Dock = DockStyle.Fill, BackColor = Theme.Card };
-        _grid.Dock = DockStyle.Fill;
-        gridHost.Controls.Add(_grid);
-        workspace.Controls.Add(CreateToolbar(), 0, 0);
-        workspace.Controls.Add(gridHost, 0, 1);
-        return workspace;
-    }
-
-    private void BuildEmptyState()
-    {
-        _emptyState.BackColor = Theme.Card;
-        TableLayoutPanel center = new()
-        {
             AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            ColumnCount = 1,
-            RowCount = 3,
-            Anchor = AnchorStyles.None,
-            BackColor = Theme.Card
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = Theme.Subtle,
+            Margin = Padding.Empty,
+            Padding = new Padding(16, 6, 16, 6)
         };
-        center.Controls.Add(new Label
-        {
-            Text = "＋",
-            AutoSize = false,
-            Size = new Size(220, 56),
-            TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Theme.Accent,
-            Font = Theme.Font(30F, FontStyle.Regular)
-        });
-        center.Controls.Add(new Label
-        {
-            Text = "拖放文件或文件夹",
-            AutoSize = false,
-            Size = new Size(220, 28),
-            TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Theme.Text,
-            Font = Theme.Font(11F, FontStyle.Bold)
-        });
-        center.Controls.Add(new Label
-        {
-            Text = "松开后自动识别文本编码",
-            AutoSize = false,
-            Size = new Size(300, 30),
-            TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Theme.Muted,
-            Font = Theme.Font(8.8F)
-        });
-        _emptyState.Controls.Add(center);
-        _emptyState.Resize += (_, _) => center.Location = new Point(
-            Math.Max(0, (_emptyState.Width - center.Width) / 2),
-            Math.Max(0, (_emptyState.Height - center.Height) / 2));
-    }
-
-    private Control CreateFooter()
-    {
-        Panel footer = new() { Dock = DockStyle.Fill, BackColor = Theme.Window, Padding = new Padding(0, 12, 0, 0) };
-        _progress.Dock = DockStyle.Top;
-        _progress.Visible = false;
-
-        _status.Text = "准备就绪";
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         _status.Dock = DockStyle.Fill;
+        _status.Margin = new Padding(0, 0, 12, 0);
+        _status.AutoEllipsis = true;
         _status.TextAlign = ContentAlignment.MiddleLeft;
         _status.ForeColor = Theme.Muted;
-        _status.Font = Theme.Font(9F);
-
-        FlowLayoutPanel actions = new()
-        {
-            Dock = DockStyle.Right,
-            Width = 340,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            BackColor = Theme.Window,
-            Padding = new Padding(0, 7, 0, 0)
-        };
-        _convertButton.Margin = new Padding(8, 0, 0, 0);
-        _settingsButton.Margin = new Padding(8, 0, 0, 0);
-        _cancelButton.Margin = new Padding(0);
-        _cancelButton.Visible = false;
-        actions.Controls.Add(_convertButton);
-        actions.Controls.Add(_settingsButton);
-        actions.Controls.Add(_cancelButton);
-
-        footer.Controls.Add(_status);
-        footer.Controls.Add(actions);
-        footer.Controls.Add(_progress);
+        _status.UseMnemonic = false;
+        _fileCount.AutoSize = true;
+        _fileCount.Margin = Padding.Empty;
+        _fileCount.ForeColor = Theme.Muted;
+        footer.Controls.Add(_status, 0, 0);
+        footer.Controls.Add(_fileCount, 1, 0);
         return footer;
     }
 
@@ -407,15 +219,14 @@ internal sealed class MainForm : Form
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
         _grid.AllowUserToResizeRows = false;
-        _grid.BackgroundColor = Theme.Card;
+        _grid.ReadOnly = true;
+        _grid.BackgroundColor = Theme.Window;
         _grid.BorderStyle = BorderStyle.None;
         _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
         _grid.GridColor = Theme.Border;
         _grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
-        _grid.ColumnHeadersHeight = 30;
-        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         _grid.RowHeadersVisible = false;
-        _grid.RowTemplate.Height = 28;
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.MultiSelect = true;
         _grid.EnableHeadersVisualStyles = false;
@@ -423,35 +234,55 @@ internal sealed class MainForm : Form
         {
             BackColor = Theme.Subtle,
             ForeColor = Theme.Text,
-            Font = Theme.Font(9F, FontStyle.Bold),
             SelectionBackColor = Theme.Subtle,
-            Alignment = DataGridViewContentAlignment.MiddleLeft,
-            Padding = new Padding(6, 0, 6, 0)
+            Alignment = DataGridViewContentAlignment.MiddleLeft
         };
         _grid.DefaultCellStyle = new DataGridViewCellStyle
         {
-            BackColor = Theme.Card,
+            BackColor = Theme.Window,
             ForeColor = Theme.Text,
             SelectionBackColor = Theme.AccentLight,
-            SelectionForeColor = Theme.Text,
-            Font = Theme.Font(9F),
-            Padding = new Padding(6, 0, 6, 0)
+            SelectionForeColor = Theme.Text
         };
-        _grid.AlternatingRowsDefaultCellStyle.BackColor = Theme.Card;
 
         _grid.Columns.Add(new DataGridViewTextBoxColumn
         {
             Name = "RowNumber",
             HeaderText = "序号",
-            Width = 54,
-            MinimumWidth = 48,
             ReadOnly = true,
             SortMode = DataGridViewColumnSortMode.NotSortable
         });
-        _grid.Columns.Add(CreateTextColumn("文件名 / 路径", nameof(FileItem.FullPath), 260, DataGridViewAutoSizeColumnMode.Fill, 100F));
-        _grid.Columns.Add(CreateTextColumn("编码", nameof(FileItem.EncodingName), 130));
-        _grid.Columns.Add(CreateTextColumn("换行符", nameof(FileItem.LineEndingName), 92));
+        _grid.Columns.Add(CreateTextColumn("文件 / 路径", nameof(FileItem.FullPath), DataGridViewAutoSizeColumnMode.Fill));
+        _grid.Columns.Add(CreateTextColumn("编码", nameof(FileItem.EncodingName)));
+        _grid.Columns.Add(CreateTextColumn("换行符", nameof(FileItem.LineEndingName)));
+        _grid.Columns.Add(CreateTextColumn("状态", nameof(FileItem.StatusText)));
         _grid.ContextMenuStrip = CreateGridContextMenu();
+    }
+
+    private void ApplyGridMetrics()
+    {
+        int Scale(int value) => _grid.LogicalToDeviceUnits(value);
+        using Graphics graphics = _grid.CreateGraphics();
+        int textHeight = TextRenderer.MeasureText(graphics, "文件", _grid.Font).Height;
+        int rowHeight = Math.Max(Scale(32), textHeight + Scale(8));
+        _grid.RowTemplate.Height = rowHeight;
+        foreach (DataGridViewRow row in _grid.Rows)
+        {
+            row.Height = rowHeight;
+        }
+
+        Padding padding = new(Scale(8), Scale(4), Scale(8), Scale(4));
+        _grid.DefaultCellStyle.Padding = padding;
+        _grid.ColumnHeadersDefaultCellStyle.Padding = padding;
+        _grid.Columns[0].MinimumWidth = Scale(58);
+        _grid.Columns[0].Width = Scale(58);
+        _grid.Columns[1].MinimumWidth = Scale(160);
+        _grid.Columns[2].MinimumWidth = Scale(80);
+        _grid.Columns[2].Width = Scale(130);
+        _grid.Columns[3].MinimumWidth = Scale(64);
+        _grid.Columns[3].Width = Scale(86);
+        _grid.Columns[4].MinimumWidth = Scale(64);
+        _grid.Columns[4].Width = Scale(132);
     }
 
     private void WireEvents()
@@ -463,7 +294,9 @@ internal sealed class MainForm : Form
         _convertButton.Click += ConvertButton_Click;
         _options.SettingsChanged += (_, _) => SaveSettings();
         _files.ListChanged += (_, _) => UpdateFileState();
+        _grid.DpiChangedAfterParent += (_, _) => ApplyGridMetrics();
         _grid.CellFormatting += Grid_CellFormatting;
+        _grid.CellToolTipTextNeeded += Grid_CellToolTipTextNeeded;
         _grid.CellMouseDown += Grid_CellMouseDown;
         _grid.DataError += (_, _) => { };
 
@@ -677,51 +510,13 @@ internal sealed class MainForm : Form
         }
     }
 
-    private async Task UpdatePreviewAsync()
-    {
-        _previewCancellation?.Cancel();
-        _previewCancellation?.Dispose();
-        _previewCancellation = new CancellationTokenSource();
-
-        if (_grid.SelectedRows.Count == 0 || _grid.SelectedRows[0].DataBoundItem is not FileItem item)
-        {
-            _previewTitle.Text = "内容预览";
-            _preview.Text = "选择一个文件以预览内容";
-            return;
-        }
-
-        _previewTitle.Text = $"内容预览  ·  {item.FileName}";
-        _preview.Text = "正在读取预览…";
-        try
-        {
-            string text = await _detector.GetPreviewAsync(item, _previewCancellation.Token);
-            if (!_previewCancellation.IsCancellationRequested)
-            {
-                _preview.Text = text;
-                _preview.SelectionStart = 0;
-                _preview.ScrollToCaret();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Selecting another row cancels the previous preview.
-        }
-        catch (Exception exception)
-        {
-            _preview.Text = $"无法预览：{exception.Message}";
-        }
-    }
-
     private void SetBusy(bool busy, string? statusText = null)
     {
         _busy = busy;
         _addFilesButton.Enabled = !busy;
         _addFolderButton.Enabled = !busy;
-        _removeButton.Enabled = !busy && _files.Count > 0;
-        _clearButton.Enabled = !busy;
-        _convertButton.Enabled = busy || _files.Count > 0;
+        UpdateFileState();
         _convertButton.Text = busy ? "取消" : "开始转换";
-        _convertButton.ButtonStyle = busy ? ModernButtonStyle.Danger : ModernButtonStyle.Primary;
         _options.Enabled = !busy;
         _progress.Visible = busy;
         if (busy)
@@ -733,15 +528,13 @@ internal sealed class MainForm : Form
 
     private void UpdateFileState()
     {
-        int selected = _files.Count;
-        _fileCount.Text = _files.Count == 0
-            ? "0 个文件"
-            : $"{_files.Count} 个文件";
-        _emptyState.Visible = false;
-        _grid.Visible = true;
-        _convertButton.Enabled = !_busy && selected > 0;
-        _clearButton.Enabled = !_busy && _files.Count > 0;
-        _removeButton.Enabled = !_busy && _files.Count > 0;
+        bool hasFiles = _files.Count > 0;
+        _fileCount.Text = $"{_files.Count} 个文件";
+        _emptyState.Visible = !hasFiles;
+        _grid.Visible = hasFiles;
+        _convertButton.Enabled = _busy || hasFiles;
+        _clearButton.Enabled = !_busy && hasFiles;
+        _removeButton.Enabled = !_busy && hasFiles;
     }
 
     private void RemoveHighlightedFiles()
@@ -776,40 +569,13 @@ internal sealed class MainForm : Form
         }
     }
 
-    private void ShowSettingsDialog()
-    {
-        using Form dialog = new()
-        {
-            Text = "转换设置",
-            StartPosition = FormStartPosition.CenterParent,
-            FormBorderStyle = FormBorderStyle.Sizable,
-            MinimizeBox = false,
-            MaximizeBox = false,
-            ShowInTaskbar = false,
-            BackColor = Theme.Window,
-            ForeColor = Theme.Text,
-            Font = Theme.Font(),
-            ClientSize = new Size(420, 680),
-            MinimumSize = new Size(380, 560)
-        };
-        _options.Dock = DockStyle.Fill;
-        dialog.Controls.Add(_options);
-        dialog.FormClosing += (_, _) =>
-        {
-            _options.SaveSettings(_settings);
-            dialog.Controls.Remove(_options);
-        };
-        dialog.Shown += (_, _) => WindowEffects.Apply(dialog.Handle);
-        dialog.ShowDialog(this);
-    }
-
     private ContextMenuStrip CreateGridContextMenu()
     {
         ContextMenuStrip menu = new()
         {
-            Font = Theme.Font(9F),
+            Font = Font,
             ShowImageMargin = false,
-            BackColor = Theme.Card,
+            BackColor = Theme.Window,
             ForeColor = Theme.Text
         };
         ToolStripMenuItem sourceEncoding = new("指定源编码");
@@ -854,7 +620,6 @@ internal sealed class MainForm : Form
         }
 
         _grid.Refresh();
-        _ = UpdatePreviewAsync();
     }
 
     private void RevealCurrentFile()
@@ -905,10 +670,22 @@ internal sealed class MainForm : Form
                 FileStatus.Converting => Theme.Accent,
                 _ => Theme.Muted
             };
-            e.CellStyle.Font = Theme.Font(8.5F, item.Status is FileStatus.Success or FileStatus.Failed
-                ? FontStyle.Bold
-                : FontStyle.Regular);
         }
+    }
+
+    private void Grid_CellToolTipTextNeeded(object? sender, DataGridViewCellToolTipTextNeededEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || _grid.Rows[e.RowIndex].DataBoundItem is not FileItem item)
+        {
+            return;
+        }
+
+        e.ToolTipText = _grid.Columns[e.ColumnIndex].DataPropertyName switch
+        {
+            nameof(FileItem.FullPath) => item.FullPath,
+            nameof(FileItem.StatusText) when item.Status == FileStatus.Failed => item.StatusText,
+            _ => e.ToolTipText
+        };
     }
 
     private void Grid_CellMouseDown(object? sender, DataGridViewCellMouseEventArgs e)
@@ -936,7 +713,7 @@ internal sealed class MainForm : Form
 
     private void MainForm_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.KeyCode == Keys.Delete && !_busy)
+        if (e.KeyCode == Keys.Delete && !_busy && _grid.ContainsFocus)
         {
             RemoveHighlightedFiles();
             e.Handled = true;
@@ -951,38 +728,12 @@ internal sealed class MainForm : Form
     private static DataGridViewTextBoxColumn CreateTextColumn(
         string header,
         string property,
-        int width,
-        DataGridViewAutoSizeColumnMode autoSizeMode = DataGridViewAutoSizeColumnMode.None,
-        float fillWeight = 100F) => new()
+        DataGridViewAutoSizeColumnMode autoSizeMode = DataGridViewAutoSizeColumnMode.None) => new()
         {
             HeaderText = header,
             DataPropertyName = property,
-            Width = width,
-            MinimumWidth = Math.Min(width, 60),
             AutoSizeMode = autoSizeMode,
-            FillWeight = fillWeight,
             ReadOnly = true,
             SortMode = DataGridViewColumnSortMode.Automatic
         };
-
-    private static ModernButton CreateButton(string text, ModernButtonStyle style, int width) => new()
-    {
-        Text = text,
-        ButtonStyle = style,
-        Width = width
-    };
-
-    private static string FormatSize(long bytes)
-    {
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        double value = bytes;
-        int unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-
-        return unit == 0 ? $"{bytes} B" : $"{value:0.##} {units[unit]}";
-    }
 }
